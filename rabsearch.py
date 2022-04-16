@@ -29,7 +29,6 @@ sg.theme('SystemDefaultForReal')
 #if city_loc != None:
 #    print("Esen:", city_loc.latitude, ":", city_loc.longitude)
 
-
 eerste_pers_voor = sg.InputText(size=(20), key='pers1_voornaam')
 eerste_pers_achter = sg.InputText(size=(20), key='pers1_achternaam')
 eerste_pers_rol = sg.DropDown(size=20, key = 'pers1_rol', values=[ x[1] for x in roles.person_roles], default_value=roles.person_roles[0][1])
@@ -48,7 +47,7 @@ check_results = sg.Button("Zoek aantal resultaten per gemeente", key='tel_result
 abort_search = sg.Button("Stop...", key='stop_tellen', enable_events=True,tooltip="Breek het zoeken voortijdig af", disabled=True)
 aktegemeente_dropdown = sg.DropDown(values=city_names, enable_events=True,
                                     key = 'aktegemeente_kies', default_value='', readonly=True)
-progress_bar = sg.ProgressBar(max_value = 100, size = (44, 10), key='progress')
+progress_bar = sg.ProgressBar(max_value = 100, size = (44, 10), key='progress', visible=False)
 radius_slider = sg.Slider(range=(0,50), orientation='horizontal', size=(50,10), key="radius", enable_events=True , default_value=10)
 gemeentelijst = sg.Listbox(values=[], size=(82, 30), key='gemeentelijst', enable_events=True, tooltip="Klik op de gewenste gemeente om de resultaten te zien")
 
@@ -56,7 +55,7 @@ zoek = sg.Submit('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegev
 
 inputs = [radius_slider, gemeentelijst, eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter, eerste_pers_rol,
           tweede_pers_achter, tweede_pers_voor, tweede_pers_rol, zw_o, zw_v, zw_m, aktegemeente_dropdown, akteperiode,
-          check_results]
+          check_results, aktegemeente_zoek]
 
 person1_column = [
         [sg.Text("Persoon 1", size=15, text_color='black', font='bold')],
@@ -136,8 +135,8 @@ def updateList(src, radius):
 def autocomplete_dropdown(value):
 
     def predict_text(input, lista):
-        pattern = re.compile(re.escape(str(input).upper()) + '.*')
-        return [w for w in lista if re.match(pattern, w)]
+        pattern = ('(^|\()'+re.escape(str(input).upper()) + '.*')
+        return [w for w in lista if re.search(pattern, w)]
 
     prediction_list = predict_text(value, city_names)
     aktegemeente_dropdown.update(prediction_list[0] if len(prediction_list) > 0 else 'geen match', values=prediction_list)
@@ -176,6 +175,8 @@ def createURL(values, gemeente):
         rol2 = "q/persoon_rol_s_1/" + rol2 + '/'
     if gemeente != '':
         gemeente = "&aktegemeente=" + gemeente
+    if '(' in gemeente:
+        gemeente = gemeente.split('(')[0]
     if periode != '':
         periode = "&akteperiode=" + periode
 
@@ -267,7 +268,7 @@ while True:
         rs.clear()
 
     elif event == 'progress':
-        progress_bar.update(current_count=rs.completion())
+        progress_bar.update(current_count=rs.completion(), visible=True)
 
     elif event == "stop_tellen" :
         rs.stop()
@@ -288,7 +289,7 @@ while True:
         results = []
         match_indexes = []
         disableInputs(True)
-        progress_bar.update(0)
+        progress_bar.update(0, visible=False)
         rs = ResultsScavenger(values, gemeentelijst.get_list_values(), results, match_indexes)
         rs.start()
 
