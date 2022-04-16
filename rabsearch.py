@@ -29,8 +29,7 @@ sg.theme('SystemDefaultForReal')
 #if city_loc != None:
 #    print("Esen:", city_loc.latitude, ":", city_loc.longitude)
 
-radius_slider = sg.Slider(range=(0,50), orientation='horizontal', size=(50,10), key="radius", enable_events=True , default_value=10)
-gemeentelijst = sg.Listbox(values=[], size=(82, 30), key='gemeentelijst', enable_events=True, tooltip="Klik op de gewenste gemeente om de resultaten te zien")
+
 eerste_pers_voor = sg.InputText(size=(20), key='pers1_voornaam')
 eerste_pers_achter = sg.InputText(size=(20), key='pers1_achternaam')
 eerste_pers_rol = sg.DropDown(size=20, key = 'pers1_rol', values=[ x[1] for x in roles.person_roles], default_value=roles.person_roles[0][1])
@@ -46,9 +45,18 @@ tweede_pers_rol = sg.DropDown(size=20, key = 'pers2_rol', values=[ x[1] for x in
 akteperiode = sg.InputText(size=(20), key='akteperiode')
 aktegemeente_zoek = sg.InputText(size=(46), key='aktegemeente_zoek', enable_events=True)
 check_results = sg.Button("Zoek aantal resultaten per gemeente", key='tel_resultaten', enable_events=True,tooltip="Zoek het aantel personen per gemeente die voldoen aan de opgegeven criteria (kan even duren)")
+abort_search = sg.Button("Stop...", key='stop_tellen', enable_events=True,tooltip="Breek het zoeken voortijdig af", disabled=True)
 aktegemeente_dropdown = sg.DropDown(values=city_names, enable_events=True,
                                     key = 'aktegemeente_kies', default_value='', readonly=True)
+progress_bar = sg.ProgressBar(max_value = 100, size = (44, 10), key='progress')
+radius_slider = sg.Slider(range=(0,50), orientation='horizontal', size=(50,10), key="radius", enable_events=True , default_value=10)
+gemeentelijst = sg.Listbox(values=[], size=(82, 30), key='gemeentelijst', enable_events=True, tooltip="Klik op de gewenste gemeente om de resultaten te zien")
+
 zoek = sg.Submit('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegeven aktegemeente")
+
+inputs = [radius_slider, gemeentelijst, eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter, eerste_pers_rol,
+          tweede_pers_achter, tweede_pers_voor, tweede_pers_rol, zw_o, zw_v, zw_m, aktegemeente_dropdown, akteperiode,
+          check_results]
 
 person1_column = [
         [sg.Text("Persoon 1", size=15, text_color='black', font='bold')],
@@ -76,7 +84,9 @@ aktegemeente_row = [
 buurgemeente_row= [
         [sg.Text("Zoeken in omgeving", size=25, text_color='black', font='bold')],
         [sg.Text("Afstand(km)", size=15), radius_slider],
-        [check_results],
+
+        [check_results, abort_search],
+        [progress_bar],
         [gemeentelijst]
 ]
 layout = [
@@ -103,12 +113,11 @@ window = sg.Window(title="RAB Person Query Generator", layout=layout, margins=(2
 
 aktegemeente_dropdown.bind(bind_string="<KeyRelease>", key_modifier="", propagate=True)
 
+
 def updateList(src, radius):
     matches = []
     if (src!= '' and (src in city_names)):
         naam, (src_latitude, src_longitude) = citylocs[next((i for i, v in enumerate(citylocs) if v[0] == src))]
-
-        print("Afstand tot ", src, "(", src_latitude, src_longitude, ")")
 
         distances = []
 
@@ -137,8 +146,6 @@ def autocomplete_dropdown(value):
     else:
         aktegemeente_zoek.update(prediction_list[0])
     return aktegemeente_zoek.get()
-
-print(window.size)
 
 def createURL(values, gemeente):
     vn1 = values['pers1_voornaam']
@@ -180,35 +187,94 @@ def createURL(values, gemeente):
           + gemeente + periode
     return url
 
+def disableInputs(value):
+    for item in inputs:
+        item.update(disabled=value)
+    abort_search.update(disabled=(value==False))
 
-def collectResults(values, gemeentes, results, match_indexes):
-    i = 0
-    for item in (gemeentes):
-        url = createURL(values, item)
-        print ( 'zoek in ' + item + '...')
-        time.sleep(1)
-        r = requests.get(url)
-        # print(r.content)
-        lines = str(r.content).split('\n')
-        # print(lines)
-        pattern = re.compile('.*Resultaten\s(\d+\s)-\s(\d+\s)van\s(\d+\s).*')
 
-        for line in lines:
-            match = pattern.match(line)
-            if match != None:
-                results.append(item + ' (aantal : ' + match.groups()[2] + ')')
-                match_indexes.append(i)
-            else:
-                results.append(item + ' (aantal : 0)')
-        i = i + 1
-    print ("Done")
-    sys.exit()
+class ResultsScavenger(threading.Thread):
+
+    def __init__(self, values, gemeentes, results, match_indexes):
+        self.__window = window
+        self.__done = False
+        self.__values = values
+        self.__gemeentes = gemeentes
+        self.__results = results
+        self.__match_indexes = match_indexes
+        self.__stop_requested = False
+        threading.Thread.__init__(self)
+
+    def collectResults(self, values, gemeentes, results, match_indexes):
+
+        i = 0
+        for item in (gemeentes):
+
+            url = createURL(values, item)
+            if (self.__stop_requested == False):
+                time.sleep(.5)
+                r = requests.get(url)
+
+                lines = str(r.content).split('\n')
+                pattern = re.compile('.*Resultaten\s(\d+\s)-\s(\d+\s)van\s(\d+\s).*')
+
+                for line in lines:
+                    match = pattern.match(line)
+                    if match != None:
+                        results.append(item + ' (aantal : ' + match.groups()[2] + ')')
+                        match_indexes.append(i)
+                    else:
+                        results.append(item + ' (aantal : 0)')
+
+                i = i + 1
+                window.write_event_value("progress", i)
+        window.write_event_value("done", 1)
+        self.__stop_requested = False
+
+    def run(self):
+        self.__done = False
+        self.collectResults(self.__values, self.__gemeentes, self.__results, self.__match_indexes)
+        self.__done = True
+        sys.exit()
+
+    def done(self):
+        return self.__done
+
+    def clear(self):
+        self.__done = False
+        self.__stop_requested = False
+
+    def completion(self):
+        return ( (len(self.__results)*100) / len(self.__gemeentes) )
+
+    def stop(self):
+        self.__stop_requested = True
+
+global rs
+rs = None
 
 
 while True:
+
     event, values = window.read()
     print(event, values)
-    if event == "Exit" or event == sg.WIN_CLOSED:
+
+    if event == 'done':
+        disableInputs(False)
+
+        gemeentelijst.update(results)
+
+        for i in match_indexes:
+            gemeentelijst.Widget.itemconfigure(i, bg='lightgreen', fg='black')  # set options for item in listbox
+        rs.clear()
+
+    elif event == 'progress':
+        progress_bar.update(current_count=rs.completion())
+
+    elif event == "stop_tellen" :
+        rs.stop()
+
+    elif event == "Exit" or event == sg.WIN_CLOSED:
         break
     elif event == "aktegemeente_zoek":
         gem = autocomplete_dropdown(values['aktegemeente_zoek'])
@@ -221,28 +287,17 @@ while True:
     elif event== "tel_resultaten":
         gem = autocomplete_dropdown(values['aktegemeente_zoek'])
         updateList(gem, values['radius'])
-
         results = []
         match_indexes = []
-        worker_thread = Thread(target=collectResults, args=(values, gemeentelijst.get_list_values(), results, match_indexes))
-        worker_thread.start()
-
-        print("foo")
-        worker_thread.join()
-        worker_thread
-        print("bar")
-
-        gemeentelijst.update(results)
-
-        for i in match_indexes:
-            print (match_indexes)
-            gemeentelijst.Widget.itemconfigure(i, bg='lightgreen', fg='black')  # set options for item in listbox
+        disableInputs(True)
+        progress_bar.update(0)
+        rs = ResultsScavenger(values, gemeentelijst.get_list_values(), results, match_indexes)
+        rs.start()
 
     elif event == "gemeentelijst" or event == "zoek":
         aktegemeente = values['aktegemeente_zoek'] if event == 'zoek' else values['gemeentelijst'][0] if len(values['gemeentelijst']) else ''
         aktegemeente = aktegemeente.split('(aantal')
         url = createURL(values, aktegemeente[0])
-        print(" opening" + url)
         webbrowser.open_new_tab(url)
 
 sys.exit()
@@ -302,3 +357,4 @@ for city in unique_city_names :
 
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
