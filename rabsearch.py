@@ -136,15 +136,13 @@ def updateList(src, radius):
 def autocomplete_dropdown(value):
 
     def predict_text(input, lista):
-        pattern = re.compile(str(input).upper() + '.*')
+        pattern = re.compile(re.escape(str(input).upper()) + '.*')
         return [w for w in lista if re.match(pattern, w)]
 
     prediction_list = predict_text(value, city_names)
     aktegemeente_dropdown.update(prediction_list[0] if len(prediction_list) > 0 else 'geen match', values=prediction_list)
-    if len(prediction_list) != 1:
-        aktegemeente_zoek.update(value=value.upper())
-    else:
-        aktegemeente_zoek.update(prediction_list[0])
+    aktegemeente_zoek.update(value=value.upper())
+
     return aktegemeente_zoek.get()
 
 def createURL(values, gemeente):
