@@ -4,6 +4,7 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 # Import the required library
+import io
 import tkinter.ttk
 
 from geopy.geocoders import Nominatim
@@ -19,6 +20,8 @@ import requests
 import re
 from threading import Thread
 import threading
+
+import folium
 
 city_names.insert(0, '')
 
@@ -50,6 +53,8 @@ aktegemeente_dropdown = sg.DropDown(values=city_names, enable_events=True,
 progress_bar = sg.ProgressBar(max_value = 100, size = (44, 10), key='progress', visible=False)
 radius_slider = sg.Slider(range=(0,50), orientation='horizontal', size=(50,10), key="radius", enable_events=True , default_value=10)
 gemeentelijst = sg.Listbox(values=[], size=(82, 30), key='gemeentelijst', enable_events=True, tooltip="Klik op de gewenste gemeente om de resultaten te zien")
+
+kaart = sg.Button("Kaart", disabled = True, enable_events=True, key="kaart")
 
 zoek = sg.Submit('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegeven aktegemeente")
 
@@ -84,7 +89,7 @@ buurgemeente_row= [
         [sg.Text("Zoeken in omgeving", size=25, text_color='black', font='bold')],
         [sg.Text("Afstand(km)", size=15), radius_slider],
 
-        [check_results, abort_search],
+        [check_results, abort_search, kaart],
         [progress_bar],
         [gemeentelijst]
 ]
@@ -112,11 +117,14 @@ window = sg.Window(title="RAB Person Query Generator", layout=layout, margins=(2
 
 aktegemeente_dropdown.bind(bind_string="<KeyRelease>", key_modifier="", propagate=True)
 
+def getCityLoc(src):
+    return citylocs[next((i for i, v in enumerate(citylocs) if v[0] == src))]
+
 
 def updateList(src, radius):
     matches = []
     if (src!= '' and (src in city_names)):
-        naam, (src_latitude, src_longitude) = citylocs[next((i for i, v in enumerate(citylocs) if v[0] == src))]
+        naam, (src_latitude, src_longitude) = getCityLoc(src)
 
         distances = []
 
@@ -207,10 +215,13 @@ class ResultsScavenger(threading.Thread):
     def collectResults(self, values, gemeentes, results, match_indexes):
 
         i = 0
+        hit_map_locations = []
         for item in (gemeentes):
 
             url = createURL(values, item)
+
             if (self.__stop_requested == False):
+                # Don't overload server....
                 time.sleep(.5)
                 r = requests.get(url)
 
@@ -220,13 +231,17 @@ class ResultsScavenger(threading.Thread):
                 for line in lines:
                     match = pattern.match(line)
                     if match != None:
-                        results.append(item + ' (aantal : ' + match.groups()[2] + ')')
+                        hit_count = match.groups()[2]
+                        results.append(item + ' (aantal : ' + hit_count + ')')
                         match_indexes.append(i)
+                        name, (lat, lon) = getCityLoc(item)
+                        hit_map_locations.append([name, lat, lon, hit_count, url])
                     else:
                         results.append(item + ' (aantal : 0)')
 
                 i = i + 1
                 window.write_event_value("progress", i)
+        generateHitMap(hit_map_locations, self.__values['radius'])
         window.write_event_value("done", 1)
         self.__stop_requested = False
 
@@ -249,20 +264,45 @@ class ResultsScavenger(threading.Thread):
     def stop(self):
         self.__stop_requested = True
 
+
+
+def generateHitMap(locations, radius):
+
+    if (len(locations)):
+        m = folium.Map(location=(locations[0][1], locations[0][2]), zoom_start=10)
+        circle = folium.Circle(location = (locations[0][1], locations[0][2]), radius=radius * 1000 )
+        circle.add_to(m)
+
+        for location in locations:
+
+            marker = folium.Marker(
+                [location[1], location[2]],
+                popup="<a href="+location[4]+"> Aantal hits: "+location[3]+"</a>",
+                tooltip = location[0]+ " hits: "+location[3]
+            )
+            marker.add_to(m)
+
+        m.save("rabsearch_hits.html")
+
+def openHitMap():
+    webbrowser.open("rabsearch_hits.html", autoraise=True)
+
 global rs
 rs = None
-
 
 while True:
 
     event, values = window.read()
     print(event, values)
 
+    if event == 'kaart':
+        openHitMap()
     if event == 'done':
         disableInputs(False)
-
         gemeentelijst.update(results)
 
+        if len(match_indexes):
+            kaart.update(disabled=False)
         for i in match_indexes:
             gemeentelijst.Widget.itemconfigure(i, bg='lightgreen', fg='black')  # set options for item in listbox
         rs.clear()
@@ -270,7 +310,8 @@ while True:
     elif event == 'progress':
         progress_bar.update(current_count=rs.completion(), visible=True)
 
-    elif event == "stop_tellen" :
+    elif event == "stop_tellen":
+        kaart.update(disabled=True)
         rs.stop()
 
     elif event == "Exit" or event == sg.WIN_CLOSED:
@@ -284,6 +325,7 @@ while True:
     elif event == "radius":
         updateList(values['aktegemeente_zoek'], values['radius'])
     elif event== "tel_resultaten":
+        kaart.update(disabled=True)
         gem = autocomplete_dropdown(values['aktegemeente_zoek'])
         updateList(gem, values['radius'])
         results = []
@@ -304,7 +346,7 @@ sys.exit()
 
 
 source = "nieuwkerke".upper()
-naam, (src_latitude, src_longitude)= citylocs[next((i for i, v in enumerate(citylocs) if v[0] == source))]
+naam, (src_latitude, src_longitude)= getCityLoc(source)
 
 print("Afstand tot ", naam, "(",src_latitude, src_longitude,")")
 
