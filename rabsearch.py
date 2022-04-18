@@ -36,10 +36,10 @@ city_names.insert(0, '')
 
 sg.theme('SystemDefaultForReal')
 
-#geolocator = Nominatim(user_agent="genealocsearch", timeout = 10)
-#city_loc = geolocator.geocode("Esen, Diksmuide" + ", Belgium")
-#if city_loc != None:
-#    print("Esen:", city_loc.latitude, ":", city_loc.longitude)
+geolocator = Nominatim(user_agent="genealocsearch", timeout = 10)
+city_loc = geolocator.geocode("zANDVOORDE, OOSTENDE" + ", Belgium")
+if city_loc != None:
+    print("zANDVOORDE, OOSTENDE", city_loc.latitude, ":", city_loc.longitude)
 
 eerste_pers_voor = sg.InputText(size=(20), key='pers1_voornaam')
 eerste_pers_achter = sg.InputText(size=(20), key='pers1_achternaam')
@@ -308,13 +308,17 @@ while True:
         openHitMap()
     if event == 'done':
         disableInputs(False)
+        print ("update gemeentelijst")
         gemeentelijst.update(results)
 
+        print ("update kaart")
         if len(match_indexes):
             kaart.update(disabled=False)
         for i in match_indexes:
             gemeentelijst.Widget.itemconfigure(i, bg='lightgreen', fg='black')  # set options for item in listbox
+        print ("kaart geupdate")
         rs.clear()
+        print ("rs cleared")
 
     elif event == 'progress':
         progress_bar.update(current_count=rs.completion(), visible=True)
