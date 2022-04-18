@@ -1,7 +1,16 @@
-# This is a sample Python script.
+# LICENSE :
+# This work is shared under the Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
+# https://creativecommons.org/licenses/by-nc-sa/4.0/
+#
+# created by Koen VELLE, Roeselare, Belgium
+# https://github.com/koenvelle/rabsearch
+#
+#
+# You are free to:
+# Share — copy and redistribute the material in any medium or format
+# Adapt — remix, transform, and build upon the material
+# The licensor cannot revoke these freedoms as long as you follow the license terms.
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 # Import the required library
 import io
