@@ -37,9 +37,9 @@ city_names.insert(0, '')
 sg.theme('SystemDefaultForReal')
 
 geolocator = Nominatim(user_agent="genealocsearch", timeout = 10)
-city_loc = geolocator.geocode("zANDVOORDE, OOSTENDE" + ", Belgium")
+city_loc = geolocator.geocode("STEENWERK" + ", France")
 if city_loc != None:
-    print("zANDVOORDE, OOSTENDE", city_loc.latitude, ":", city_loc.longitude)
+    print("STEENWERK", city_loc.latitude, ":", city_loc.longitude)
 
 eerste_pers_voor = sg.InputText(size=(20), key='pers1_voornaam')
 eerste_pers_achter = sg.InputText(size=(20), key='pers1_achternaam')
