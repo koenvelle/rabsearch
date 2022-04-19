@@ -16,6 +16,7 @@
 import io
 import tkinter.ttk
 
+import PySimpleGUI
 from geopy.geocoders import Nominatim
 import sys
 import roles
@@ -331,10 +332,15 @@ def persRolDropDownHandler(widget, event, value):
             if (value not in widget.Values):
                 print("restoring defaults")
                 # whe have matches, and there is currently no complete valid value entered
-                restoreRolesList(widget, widget.Values[0])
+                if window.find_element_with_focus() is not None:
+                    print(" dropdown activated")
+                    #have we opened the dropdown ?V
+                    restoreRolesList(widget, widget.Values[0])
             else :
                 # whe have matches, and there is currently a valid value entered
-                restoreRolesList(widget, value)
+                print("boo")
+                #we can attempt to restore the default list here, but somehow this messes up
+                #the selected value...
         else :
             # no match on focus out
             restoreRolesList(widget)
@@ -351,10 +357,6 @@ def persRolDropDownHandler(widget, event, value):
         widget.widget.tk_focusNext().focus()
         return ("break")
 
-
-
-
-
 global rs
 rs = None
 
@@ -362,6 +364,10 @@ while True:
 
     event, values = window.read()
     print(event, values)
+
+    if event == "Exit" or event == sg.WIN_CLOSED:
+        sys.exit()
+        break
 
     if event.startswith('pers1_rol'):
         value = values['pers1_rol'].capitalize()
