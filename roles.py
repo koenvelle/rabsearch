@@ -13,7 +13,7 @@
 
 
 person_roles = [
-(0, "alle rollen"),
+(0, "Alle rollen"),
 (1, "Bruid"),
 (2, "Bruidegom"),
 (3, "Vader bruidegom"),
