@@ -37,13 +37,14 @@ city_names.insert(0, '')
 sg.theme('SystemDefaultForReal')
 
 geolocator = Nominatim(user_agent="genealocsearch", timeout = 10)
-city_loc = geolocator.geocode("STEENWERK" + ", France")
+city_loc = geolocator.geocode("beveren aan de ijzer" + ", Belgium")
 if city_loc != None:
-    print("STEENWERK", city_loc.latitude, ":", city_loc.longitude)
+    print("beveren aan de ijzer", city_loc.latitude, ":", city_loc.longitude)
 
 eerste_pers_voor = sg.InputText(size=(20), key='pers1_voornaam')
 eerste_pers_achter = sg.InputText(size=(20), key='pers1_achternaam')
 eerste_pers_rol = sg.DropDown(size=20, key = 'pers1_rol', values=[ x[1] for x in roles.person_roles], default_value=roles.person_roles[0][1])
+
 eerste_persoon_beroep = sg.InputText(size=(20), key='pers1_beroep')
 
 zw_m = sg.Checkbox('M', key = 'zw_m')
@@ -123,6 +124,15 @@ layout = [
 
 
 window = sg.Window(title="RAB Person Query Generator", layout=layout, margins=(20, 20), element_justification='c', finalize=True, resizable=True, location=(0,0))
+
+eerste_pers_rol.bind("<FocusOut>", "eerste_pers_rol_FocusOut")
+eerste_pers_rol.bind("<ButtonRelease>", "eerste_pers_rol_FocusIn")
+eerste_pers_rol.bind("<KeyRelease>", "eerste_pers_rol_predict")
+eerste_pers_rol.bind("<Return>", "eerste_pers_rol_enter")
+
+tweede_pers_rol.bind("<FocusOut>", "tweede_pers_rol_FocusOut")
+tweede_pers_rol.bind("<ButtonRelease>", "tweede_pers_rol_FocusIn")
+tweede_pers_rol.bind("<KeyRelease>", "tweede_pers_rol_predict")
 
 aktegemeente_dropdown.bind(bind_string="<KeyRelease>", key_modifier="", propagate=True)
 
@@ -296,6 +306,55 @@ def generateHitMap(locations, radius):
 def openHitMap():
     webbrowser.open("rabsearch_hits.html", autoraise=True)
 
+def restoreRolesList(widget, value=None):
+    default_roles_list = [x[1] for x in roles.person_roles]
+    if value is None:
+        value = default_roles_list[0]
+    widget.update(values=default_roles_list, value=value)
+
+def persRolDropDownHandler(widget, event, value):
+    print('handler' + event)
+    if event.endswith('predict'):
+        pattern = re.compile('.*'+re.escape(value.lower())+'.*')
+        matches = []
+        for (id, role) in roles.person_roles:
+            match = pattern.match(role.lower())
+            if (match) :
+                matches.append(role)
+        if len(matches) == 1:
+            restoreRolesList(widget, matches[0])
+        else :
+            widget.update(values=matches, value=value)
+
+    elif event.endswith('FocusOut'):
+        if len(widget.Values) > 0 :
+            if (value not in widget.Values):
+                print("restoring defaults")
+                # whe have matches, and there is currently no complete valid value entered
+                restoreRolesList(widget, widget.Values[0])
+            else :
+                # whe have matches, and there is currently a valid value entered
+                restoreRolesList(widget, value)
+        else :
+            # no match on focus out
+            restoreRolesList(widget)
+            print("0 values")
+            if window.find_element_with_focus() is None:
+                widget.widget.event_generate('<Button>')
+                print(" dropdown activated")
+
+
+    elif event.endswith('FocusIn'):
+        widget.Widget.select_range(0, 'end')
+
+    elif event.endswith('enter'):
+        widget.widget.tk_focusNext().focus()
+        return ("break")
+
+
+
+
+
 global rs
 rs = None
 
@@ -303,6 +362,14 @@ while True:
 
     event, values = window.read()
     print(event, values)
+
+    if event.startswith('pers1_rol'):
+        value = values['pers1_rol'].capitalize()
+        persRolDropDownHandler(eerste_pers_rol, event, value)
+
+    if event.startswith('pers2_rol'):
+        value = values['pers2_rol'].capitalize()
+        persRolDropDownHandler(tweede_pers_rol, event, value)
 
     if event == 'kaart':
         openHitMap()
