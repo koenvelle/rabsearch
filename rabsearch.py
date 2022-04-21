@@ -12,11 +12,9 @@
 # The licensor cannot revoke these freedoms as long as you follow the license terms.
 
 
-# Import the required library
-import io
-import tkinter.ttk
+#fixme : search without 'gemeente' results in crash in map creation and search thread.
 
-import PySimpleGUI
+
 from geopy.geocoders import Nominatim
 import sys
 import roles
@@ -28,7 +26,6 @@ import PySimpleGUI as sg
 import webbrowser
 import requests
 import re
-from threading import Thread
 import threading
 
 import folium
@@ -261,7 +258,9 @@ class ResultsScavenger(threading.Thread):
 
                 i = i + 1
                 window.write_event_value("progress", i)
-        generateHitMap(hit_map_locations, self.__values['radius'])
+
+        x, centre = getCityLoc(gemeentes[0])
+        generateHitMap(centre, hit_map_locations, self.__values['radius'])
         window.write_event_value("done", 1)
         self.__stop_requested = False
 
@@ -286,12 +285,13 @@ class ResultsScavenger(threading.Thread):
 
 
 
-def generateHitMap(locations, radius):
+def generateHitMap(centre, locations, radius):
+
+    m = folium.Map(location=centre, zoom_start=10)
+    circle = folium.Circle(location=centre, radius=radius * 1000)
+    circle.add_to(m)
 
     if (len(locations)):
-        m = folium.Map(location=(locations[0][1], locations[0][2]), zoom_start=10)
-        circle = folium.Circle(location = (locations[0][1], locations[0][2]), radius=radius * 1000 )
-        circle.add_to(m)
 
         for location in locations:
 
@@ -302,7 +302,7 @@ def generateHitMap(locations, radius):
             )
             marker.add_to(m)
 
-        m.save("rabsearch_hits.html")
+    m.save("rabsearch_hits.html")
 
 def openHitMap():
     webbrowser.open("rabsearch_hits.html", autoraise=True)
