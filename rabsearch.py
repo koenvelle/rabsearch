@@ -27,6 +27,7 @@ import webbrowser
 import requests
 import re
 import threading
+from parochieregisters import gemeentes as parochieregisters
 
 import folium
 
@@ -64,7 +65,7 @@ gemeentelijst = sg.Listbox(values=[], size=(82, 30), key='gemeentelijst', enable
 
 kaart = sg.Button("Kaart", disabled = True, enable_events=True, key="kaart")
 
-zoek = sg.Submit('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegeven aktegemeente")
+zoek = sg.Button('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegeven aktegemeente")
 
 inputs = [radius_slider, gemeentelijst, eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter, eerste_pers_rol,
           tweede_pers_achter, tweede_pers_voor, tweede_pers_rol, zw_o, zw_v, zw_m, aktegemeente_dropdown, akteperiode,
@@ -101,7 +102,7 @@ buurgemeente_row= [
         [progress_bar],
         [gemeentelijst]
 ]
-layout = [
+layout_personen = [
     [ sg.Column(
         [[
         sg.Column(person1_column),
@@ -115,13 +116,46 @@ layout = [
     [sg.Column(aktegemeente_row, justification = 'left')],
     [sg.HorizontalSeparator()],
     [sg.Column(buurgemeente_row, justification = 'left')],
+]
+
+gemeentelijst_unsorted = list(parochieregisters.keys())
+gemeentelijst_sorted = sorted(gemeentelijst_unsorted)
+
+print(list(gemeentelijst_unsorted)[0:100])
+print(list(gemeentelijst_sorted)[0:100])
+PR_gemeentelijst = sg.DropDown(values=gemeentelijst_sorted, size=60, key='parochieregisters_gemeente', enable_events=True)
+PR_parochielijst = sg.DropDown(values=['kies eerst een gemeente'], size=60, key='parochieregisters_parochie', enable_events=True, disabled=True)
+PR_typelijst = sg.DropDown(values=['kies eerst een gemeente en een parochie'], size=60, key='parochieregisters_type', disabled=True, enable_events=True )
+PR_jaar_van = sg.InputText(key='PR_jaar_van', size = 5, visible = False)
+PR_jaar_tot = sg.InputText(key='PR_jaar_tot', size = 5, visible = False)
+PR_links = sg.Listbox(values=[], key='parochieregisters_links',size=(90,50), enable_events=True)
+
+layout_registers = [
+    [sg.Text("Gemeente", size=15), PR_gemeentelijst],
+    [sg.Text("Parochie", size=15), PR_parochielijst],
+    [sg.Text("Type", size=15), PR_typelijst],
+    [sg.Text("Jaartal", size=15, visible=False), PR_jaar_van, sg.Text("-", visible=False), PR_jaar_tot],
     [sg.HorizontalSeparator()],
+    [PR_links],
+]
+
+tabgrp = [
+    [sg.TabGroup(
+        [
+        [sg.Tab('Personen Zoeken', layout_personen,title_color='Blue', element_justification='left')],
+        [sg.Tab('Parochieregisters', layout_registers,title_color='Blue', element_justification='left')]
+        ],
+        selected_title_color="green"
+    ),
     [sg.Text("Koen Velle (koen.velle@gmail.com)")],
     [sg.Text("'Standing on the shoulders of Giants' (de vrijwilligers van het RAB)")]
+    ]
 ]
 
 
-window = sg.Window(title="RAB Person Query Generator", layout=layout, margins=(20, 20), element_justification='c', finalize=True, resizable=True, location=(0,0))
+
+
+window = sg.Window(title="RAB Person Query Generator", layout=tabgrp , margins=(20, 20), element_justification='c', finalize=True, resizable=True, location=(0,0))
 
 eerste_pers_rol.bind("<FocusOut>", "eerste_pers_rol_FocusOut")
 eerste_pers_rol.bind("<ButtonRelease>", "eerste_pers_rol_FocusIn")
@@ -360,10 +394,78 @@ def persRolDropDownHandler(widget, event, value):
 global rs
 rs = None
 
+def updatePRTypes(gemeente, parochie):
+    types = list()
+    for entry in parochieregisters[gemeente][parochie]:
+        print(entry)
+        types.append(entry['aktetype'])
+    sortedtypes = sorted(list(set(types)))
+    PR_typelijst.update(values=sortedtypes, value=sortedtypes[0], disabled=False)
+    updatePRResults(gemeente, parochie, list(set(types))[0], PR_jaar_van.get() )
+
+def updatePRResults(gemeente, parochie, type, jaar_van):
+    allresults = parochieregisters[gemeente][parochie]
+
+    global PRMatches
+    PRMatches = []
+
+    for i in allresults:
+        if type == i['aktetype']:
+            if jaar_van != '':
+                print('fixme')
+            else:
+                PRMatches.append(i)
+
+    i = 0
+    PR_links_values=[]
+    for match in PRMatches:
+        PR_links_values.append(str(i).ljust(5) + ': ' + match['dates'] + ': ' + match['aktetype'])
+        i = i + 1
+
+    PR_links.update(values=PR_links_values)
+
+def getScansURL(eadid, src_url):
+    r = requests.get(src_url)
+    time.sleep(.5)
+    lines = (r.content.decode('utf-8')).split('\n')
+    for index, elem in enumerate(lines):
+        if '/inventarisnr/' in elem:
+            inv_re = re.compile('.+/inventarisnr/(.+?)/.*')
+            invnr = inv_re.match(elem)[1]
+            break
+    tgt_url = 'https://search.arch.be/nl/zoeken-naar-archieven/zoekresultaat/inventaris/rabscans/eadid/' +\
+              eadid+'/inventarisnr/'+invnr+'/level/file'
+    return tgt_url
+
 while True:
 
     event, values = window.read()
     print(event, values)
+    gemeente = values['parochieregisters_gemeente']
+    parochie = values['parochieregisters_parochie']
+
+    if event == 'parochieregisters_gemeente':
+        parochies = list(parochieregisters[gemeente].keys())
+        PR_parochielijst.update(disabled=False, values=parochies, value=parochies[0])
+        updatePRTypes(gemeente, parochies[0])
+
+    if event == 'parochieregisters_parochie':
+        parochies = list(parochieregisters[gemeente].keys())
+        updatePRTypes(gemeente, parochie)
+
+    if event == 'parochieregisters_type':
+        updatePRResults(gemeente, parochie, values['parochieregisters_type'], values['PR_jaar_van'])
+
+    if event == 'parochieregisters_jaar_van':
+        updatePRResults(gemeente, parochie, values['parochieregisters_type'], values['PR_jaar_van'])
+
+    if event == 'parochieregisters_links':
+        #fixme if valid value
+        print(PRMatches)
+        linkindex = int(values['parochieregisters_links'][0].split(':')[0])
+
+        url = PRMatches[linkindex]['url']
+        webbrowser.open_new_tab(getScansURL(PRMatches[linkindex]['bloknr'], PRMatches[linkindex]['url']))
 
     if event == "Exit" or event == sg.WIN_CLOSED:
         sys.exit()
