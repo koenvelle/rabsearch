@@ -12,9 +12,8 @@
 # The licensor cannot revoke these freedoms as long as you follow the license terms.
 
 
-# fixme : search without 'gemeente' results in crash in map creation and search thread.
-
-
+# fixme : search without 'gemeente' or incomplete value results in crash in map creation and search thread.
+import pkg_resources
 from geopy.geocoders import Nominatim
 import sys
 import roles
@@ -28,6 +27,8 @@ import requests
 import re
 import threading
 from parochieregisters import gemeentes as parochieregisters
+from tkinter import *
+
 
 import folium
 
@@ -131,9 +132,9 @@ print(list(gemeentelijst_sorted)[0:100])
 PR_gemeentelijst = PySimpleGUI.DropDown(values=gemeentelijst_sorted, size=60, key='parochieregisters_gemeente',
                                         enable_events=True)
 PR_parochielijst = PySimpleGUI.DropDown(values=['kies eerst een gemeente'], size=60, key='parochieregisters_parochie',
-                                        enable_events=True, disabled=True)
+                                        enable_events=True, disabled=True, readonly=True)
 PR_typelijst = PySimpleGUI.DropDown(values=['kies eerst een gemeente en een parochie'], size=60, key='parochieregisters_type',
-                                    disabled=True, enable_events=True)
+                                    disabled=True, enable_events=True, readonly=True)
 PR_jaar_van = PySimpleGUI.InputText(key='PR_jaar_van', size=5, visible=False)
 PR_jaar_tot = PySimpleGUI.InputText(key='PR_jaar_tot', size=5, visible=False)
 PR_links = PySimpleGUI.Listbox(values=[], key='parochieregisters_links', size=(90, 50), enable_events=True)
@@ -171,6 +172,12 @@ eerste_pers_rol.bind("<Return>", "eerste_pers_rol_enter")
 tweede_pers_rol.bind("<FocusOut>", "tweede_pers_rol_FocusOut")
 tweede_pers_rol.bind("<ButtonRelease>", "tweede_pers_rol_FocusIn")
 tweede_pers_rol.bind("<KeyRelease>", "tweede_pers_rol_predict")
+tweede_pers_rol.bind("<Return>", "tweede_pers_rol_enter")
+
+PR_gemeentelijst.bind("<FocusOut>", "parochieregisters_gemeente_FocusOut")
+PR_gemeentelijst.bind("<ButtonRelease>", "parochieregisters_gemeente_FocusIn")
+PR_gemeentelijst.bind("<KeyRelease>", "parochieregisters_gemeente_predict")
+PR_gemeentelijst.bind("<Return>", "parochieregisters_gemeente_enter")
 
 aktegemeente_dropdown.bind(bind_string="<KeyRelease>", key_modifier="", propagate=True)
 
@@ -349,49 +356,91 @@ def open_hit_map():
     webbrowser.open("rabsearch_hits.html", autoraise=True)
 
 
-def restore_dropdown_list(widget, value=None):
-    default_roles_list = [x[1] for x in roles.person_roles]
+def restore_dropdown_list(widget, defaults, value=None):
+    print ("restore dropdown list, selected value = " + str(value))
     if value is None:
-        value = default_roles_list[0]
-    widget.update(values=default_roles_list, value=value)
+        value = defaults[0]
+    widget.update(values=defaults)
+    widget.update(set_to_index= defaults.index(value))
 
-
-def drop_down_handler(widget, event, value):
-    if event.endswith('predict'):
-        pattern = re.compile('.*' + re.escape(value.lower()) + '.*')
-        matches = []
-        for (id, role) in roles.person_roles:
-            match = pattern.match(role.lower())
-            if match:
-                matches.append(role)
-        if len(matches) == 1:
-            restore_dropdown_list(widget, matches[0])
+def drop_down_predict(default_list, value, starts_with):
+    matches = list()
+    for (item) in default_list:
+        if starts_with is True:
+            match = item.lower().startswith(value.lower())
         else:
+            match = value.lower() in (item.lower())
+        if match:
+            print(value.lower() + " matches " + item.lower())
+            matches.append(item)
+    return matches
+
+
+
+
+def drop_down_handler(widget, default_list, event, value, starts_with=False):
+    print("drop_down_handler : " + event + " " + value)
+    global pre_prediction_value
+    matches = list()
+    #fixme : delete any characters that are added if there's no potential matches
+    #fixme : if length of new value is the same as before, don't change cursor pos
+
+    if event.endswith('predict') or event.endswith('FocusOut'):
+        if event.endswith('predict') and pre_prediction_value is not None :
+            print ("cursor is at " + str())
+
+            cursor_pos = widget.widget.index(INSERT)
+            if cursor_pos < len(pre_prediction_value):
+                #we're moving back
+                print("moving back updating to value = " + value[0:cursor_pos])
+                value = value[0:cursor_pos]
+                widget.update(value=value)
+
+                pre_prediction_value = None
+            else:
+                value = pre_prediction_value + value[len(pre_prediction_value)]
+        matches = drop_down_predict(default_list, value, starts_with)
+        if len(matches) == 1:
+            print("found match")
+            if len(value) == len(matches[0]):
+                pre_prediction_value = None
+            else:
+                pre_prediction_value = matches[0][0:len(value)]
+            restore_dropdown_list(widget, default_list, matches[0])
+            widget.widget.icursor(len(value))
+        else:
+            pre_prediction_value = None
             widget.update(values=matches, value=value)
 
-    elif event.endswith('FocusOut'):
-        if len(widget.Values) > 0:
+    if event.endswith('FocusOut'):
+        pre_prediction_value = None
+        if len(matches) == 1:
             if value not in widget.Values:
                 print("restoring defaults")
                 # whe have matches, and there is currently no complete valid value entered
                 if window.find_element_with_focus() is not None:
-                    print(" dropdown activated")
-                    # have we opened the dropdown ?
-                    restore_dropdown_list(widget, widget.Values[0])
-            else:
-                # whe have matches, and there is currently a valid value entered
-                print("boo")
-                # we can attempt to restore the default list here, but somehow this messes up
-                # the selected value...
-        else:
+                    # if we have not opened the dropdown
+                    print ("window.find_element_with_focus() is not None, setting default list and value to " + widget.Values[0])
+                    restore_dropdown_list(widget, default_list, value)
+
+        elif len(matches) == 0:
             # no match on focus out
-            restore_dropdown_list(widget)
-            print("0 values")
+            print("loosing focus, no possible matches, taking first of matches")
+            restore_dropdown_list(widget, default_list)
             if window.find_element_with_focus() is None:
                 widget.widget.event_generate('<Button>')
                 print(" dropdown activated")
+        else :
+            # multiple matches possible on focus out
+            if window.find_element_with_focus() is None:
+                print("loosing focus, dropdown activated, no single match, taking first of matches")
+            else:
+                print("loosing focus, no single match, taking first of matches")
+                widget.update(values=default_list)
+                widget.update(value=matches[0])
 
     elif event.endswith('FocusIn'):
+        pre_prediction_value = None
         widget.Widget.select_range(0, 'end')
 
     elif event.endswith('enter'):
@@ -448,6 +497,8 @@ def get_scans_url(eadid, src_url):
               eadid + '/inventarisnr/' + invnr + '/level/file'
     return tgt_url
 
+global pre_prediction_value
+pre_prediction_value = None
 
 while True:
 
@@ -456,12 +507,16 @@ while True:
     gemeente = values['parochieregisters_gemeente']
     parochie = values['parochieregisters_parochie']
 
-    if event == 'parochieregisters_gemeente':
-        parochies = list(parochieregisters[gemeente].keys())
-        PR_parochielijst.update(disabled=False, values=parochies, value=parochies[0])
-        update_pr_types(gemeente, parochies[0])
+    if event.startswith('parochieregisters_gemeente'):
+            value = values['parochieregisters_gemeente']
+            drop_down_handler(PR_gemeentelijst, list(parochieregisters.keys()), event, value, starts_with=True)
+            if ((list(parochieregisters.keys())).count(PR_gemeentelijst.get()) > 0):
+                print('found gemeente in keys ' + PR_gemeentelijst.get())
+                parochies = list(parochieregisters[PR_gemeentelijst.get()].keys())
+                PR_parochielijst.update(disabled=False, values=parochies, value=parochies[0])
+                update_pr_types(PR_gemeentelijst.get(), parochies[0])
 
-    if event == 'parochieregisters_parochie':
+    if event== 'parochieregisters_parochie':
         parochies = list(parochieregisters[gemeente].keys())
         update_pr_types(gemeente, parochie)
 
@@ -483,11 +538,11 @@ while True:
 
     if event.startswith('pers1_rol'):
         value = values['pers1_rol'].capitalize()
-        drop_down_handler(eerste_pers_rol, event, value)
+        drop_down_handler(eerste_pers_rol, roles.role_names, event, value)
 
     if event.startswith('pers2_rol'):
         value = values['pers2_rol'].capitalize()
-        drop_down_handler(tweede_pers_rol, event, value)
+        drop_down_handler(tweede_pers_rol, roles.role_names, event, value)
 
     if event == 'kaart':
         open_hit_map()
@@ -514,7 +569,7 @@ while True:
         rs.stop()
 
     elif event == "Exit" or event == PySimpleGUI.WIN_CLOSED:
-        break
+        sys.exit()
     elif event == "aktegemeente_zoek":
         gem = autocomplete_dropdown(values['aktegemeente_zoek'])
         update_radius_search_results(gem, values['radius'])

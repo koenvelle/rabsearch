@@ -120,3 +120,5 @@ person_roles = [
 (6027, "Volmachtgever"),
 (6030, "Vreemdeling"),
 (6031, "Partner") ]
+
+role_names  = [x[1] for x in person_roles]
