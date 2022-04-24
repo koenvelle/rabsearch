@@ -12,7 +12,6 @@
 # The licensor cannot revoke these freedoms as long as you follow the license terms.
 
 
-# fixme : search without 'gemeente' or incomplete value results in crash in map creation and search thread.
 import pkg_resources
 from geopy.geocoders import Nominatim
 import sys
@@ -59,7 +58,8 @@ tweede_pers_rol = PySimpleGUI.DropDown(size=20, key='pers2_rol', values=[x[1] fo
 akteperiode = PySimpleGUI.InputText(size=20, key='akteperiode')
 aktegemeente_zoek = PySimpleGUI.InputText(size=46, key='aktegemeente_zoek', enable_events=True)
 check_results = PySimpleGUI.Button("Zoek aantal resultaten per gemeente", key='tel_resultaten', enable_events=True,
-                                   tooltip="Zoek het aantel personen per gemeente die voldoen aan de opgegeven criteria (kan even duren)")
+                                   tooltip="Zoek het aantel personen per gemeente die voldoen aan de opgegeven criteria (kan even duren)",
+                                   disabled=True)
 abort_search = PySimpleGUI.Button("Stop...", key='stop_tellen', enable_events=True, tooltip="Breek het zoeken voortijdig af",
                                   disabled=True)
 aktegemeente_dropdown = PySimpleGUI.DropDown(values=city_names, enable_events=True,
@@ -97,9 +97,9 @@ person2_column = [
 ]
 aktegemeente_row = [
     [PySimpleGUI.Text("Aktegemeente", text_color='black', font='bold')],
-    [PySimpleGUI.Text("Periode", size=15), akteperiode],
     [PySimpleGUI.Text("Gemeente", size=15), aktegemeente_zoek],
     [PySimpleGUI.Text("", size=15), aktegemeente_dropdown],
+    [PySimpleGUI.Text("Periode", size=15), akteperiode],
     [zoek],
 ]
 buurgemeente_row = [
@@ -204,7 +204,8 @@ def update_radius_search_results(src, radius):
                 matches.append(d[1])
 
     radius_search_results.update(matches)
-
+    print('test ' + str(len(matches)))
+    check_results.update(disabled=(len(matches) == 0))
 
 def autocomplete_dropdown(value):
     def predict_text(input, lista):
@@ -382,6 +383,7 @@ def drop_down_handler(widget, default_list, event, value, starts_with=False):
     print("drop_down_handler : " + event + " " + value)
     global pre_prediction_value
     matches = list()
+    skip_predict = False
     #fixme : delete any characters that are added if there's no potential matches
     #fixme : if length of new value is the same as before, don't change cursor pos
 
@@ -392,6 +394,7 @@ def drop_down_handler(widget, default_list, event, value, starts_with=False):
             cursor_pos = widget.widget.index(INSERT)
             if cursor_pos < len(pre_prediction_value):
                 #we're moving back
+                skip_predict = True
                 print("moving back updating to value = " + value[0:cursor_pos])
                 value = value[0:cursor_pos]
                 widget.update(value=value)
@@ -399,7 +402,8 @@ def drop_down_handler(widget, default_list, event, value, starts_with=False):
                 pre_prediction_value = None
             else:
                 value = pre_prediction_value + value[len(pre_prediction_value)]
-        matches = drop_down_predict(default_list, value, starts_with)
+        if not skip_predict:
+            matches = drop_down_predict(default_list, value, starts_with)
         if len(matches) == 1:
             print("found match")
             if len(value) == len(matches[0]):
@@ -503,18 +507,26 @@ pre_prediction_value = None
 while True:
 
     event, values = window.read()
+    if event == "Exit" or event == PySimpleGUI.WIN_CLOSED:
+        break
+
     print(event, values)
-    gemeente = values['parochieregisters_gemeente']
-    parochie = values['parochieregisters_parochie']
+    gemeente = ''
+    parochie = ''
+    if values is not None:
+        gemeente = values['parochieregisters_gemeente']
+        parochie = values['parochieregisters_parochie']
+    if event is None:
+        event = ''
 
     if event.startswith('parochieregisters_gemeente'):
-            value = values['parochieregisters_gemeente']
-            drop_down_handler(PR_gemeentelijst, list(parochieregisters.keys()), event, value, starts_with=True)
-            if ((list(parochieregisters.keys())).count(PR_gemeentelijst.get()) > 0):
-                print('found gemeente in keys ' + PR_gemeentelijst.get())
-                parochies = list(parochieregisters[PR_gemeentelijst.get()].keys())
-                PR_parochielijst.update(disabled=False, values=parochies, value=parochies[0])
-                update_pr_types(PR_gemeentelijst.get(), parochies[0])
+        value = values['parochieregisters_gemeente']
+        drop_down_handler(PR_gemeentelijst, list(parochieregisters.keys()), event, value, starts_with=True)
+        if ((list(parochieregisters.keys())).count(PR_gemeentelijst.get()) > 0):
+            print('found gemeente in keys ' + PR_gemeentelijst.get())
+            parochies = list(parochieregisters[PR_gemeentelijst.get()].keys())
+            PR_parochielijst.update(disabled=False, values=parochies, value=parochies[0])
+            update_pr_types(PR_gemeentelijst.get(), parochies[0])
 
     if event== 'parochieregisters_parochie':
         parochies = list(parochieregisters[gemeente].keys())
@@ -568,8 +580,6 @@ while True:
         kaart.update(disabled=True)
         rs.stop()
 
-    elif event == "Exit" or event == PySimpleGUI.WIN_CLOSED:
-        sys.exit()
     elif event == "aktegemeente_zoek":
         gem = autocomplete_dropdown(values['aktegemeente_zoek'])
         update_radius_search_results(gem, values['radius'])
@@ -584,10 +594,11 @@ while True:
         update_radius_search_results(gem, values['radius'])
         results = []
         match_indexes = []
-        disable_person_inputs(True)
-        progress_bar.update(0, visible=False)
-        rs = ResultsScavenger(values, radius_search_results.get_list_values(), results, match_indexes)
-        rs.start()
+        if len(radius_search_results.get_list_values()) > 0:
+            disable_person_inputs(True)
+            progress_bar.update(0, visible=False)
+            rs = ResultsScavenger(values, radius_search_results.get_list_values(), results, match_indexes)
+            rs.start()
 
     elif event == "gemeentelijst" or event == "zoek":
         aktegemeente = values['aktegemeente_zoek'] if event == 'zoek' else values['gemeentelijst'][0] if len(
