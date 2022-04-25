@@ -10,7 +10,7 @@
 # Share — copy and redistribute the material in any medium or format
 # Adapt — remix, transform, and build upon the material
 # The licensor cannot revoke these freedoms as long as you follow the license terms.
-
+from datetime import datetime
 
 import pkg_resources
 from geopy.geocoders import Nominatim
@@ -135,7 +135,7 @@ PR_parochielijst = PySimpleGUI.DropDown(values=['kies eerst een gemeente'], size
                                         enable_events=True, disabled=True, readonly=True)
 PR_typelijst = PySimpleGUI.DropDown(values=['kies eerst een gemeente en een parochie'], size=60, key='parochieregisters_type',
                                     disabled=True, enable_events=True, readonly=True)
-PR_jaar_van = PySimpleGUI.InputText(key='PR_jaar_van', size=5, visible=False)
+PR_jaar_van = PySimpleGUI.InputText(key='parochieregisters_jaar_van', size=5, visible=True, enable_events=True)
 PR_jaar_tot = PySimpleGUI.InputText(key='PR_jaar_tot', size=5, visible=False)
 PR_links = PySimpleGUI.Listbox(values=[], key='parochieregisters_links', size=(90, 50), enable_events=True)
 
@@ -143,7 +143,7 @@ layout_registers = [
     [PySimpleGUI.Text("Gemeente", size=15), PR_gemeentelijst],
     [PySimpleGUI.Text("Parochie", size=15), PR_parochielijst],
     [PySimpleGUI.Text("Type", size=15), PR_typelijst],
-    [PySimpleGUI.Text("Jaartal", size=15, visible=False), PR_jaar_van, PySimpleGUI.Text("-", visible=False), PR_jaar_tot],
+    [PySimpleGUI.Text("Jaartal", size=15, visible=True), PR_jaar_van, PySimpleGUI.Text("-", visible=False), PR_jaar_tot],
     [PySimpleGUI.HorizontalSeparator()],
     [PR_links],
 ]
@@ -474,7 +474,11 @@ def update_pr_results(gemeente, parochie, akte_type, jaar_van):
     for i in allresults:
         if akte_type == i['aktetype']:
             if jaar_van != '':
-                print('fixme')
+                jaar = int(jaar_van)
+                start_year = datetime.strptime(i['startdate'], '%d/%m/%Y').year
+                end_year = datetime.strptime(i['enddate'], '%d/%m/%Y').year
+                if start_year <= jaar <= end_year:
+                    PRMatches.append(i)
             else:
                 PRMatches.append(i)
 
@@ -533,10 +537,15 @@ while True:
         update_pr_types(gemeente, parochie)
 
     if event == 'parochieregisters_type':
-        update_pr_results(gemeente, parochie, values['parochieregisters_type'], values['PR_jaar_van'])
+        update_pr_results(gemeente, parochie, values['parochieregisters_type'], values['parochieregisters_jaar_van'])
 
     if event == 'parochieregisters_jaar_van':
-        update_pr_results(gemeente, parochie, values['parochieregisters_type'], values['PR_jaar_van'])
+        jaar = values['parochieregisters_jaar_van']
+        numeric_filter = filter(str.isdigit, jaar)
+        jaar = ("".join(numeric_filter))
+        PR_jaar_van.update(value=jaar)
+
+        update_pr_results(gemeente, parochie, values['parochieregisters_type'], jaar)
 
     if event == 'parochieregisters_links':
         # fixme if valid value
