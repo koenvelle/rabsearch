@@ -31,6 +31,28 @@ from tkinter import *
 
 import folium
 
+version_major = 1
+version_minor = 0
+
+def get_latest_version():
+    version_url = "https://koenvelle.be/rabsearch/version"
+    r = requests.get(version_url)
+    lines = (r.content.decode('utf-8')).split('\n')
+    majmin = (int(lines[0].split('.')[0]), int(lines[0].split('.')[1]))
+    return (lines[0].strip(), majmin)
+
+def check_for_new_version( current, latest):
+    if current[0] < latest[0]:
+        return True
+    elif current[0] == latest[0] and current[1] < latest[1]:
+        return True
+    return False
+
+
+
+
+
+
 city_names.insert(0, '')
 
 PySimpleGUI.theme('SystemDefaultForReal')
@@ -148,6 +170,10 @@ layout_registers = [
     [PR_links],
 ]
 
+update = "https://koenvelle.be/rabsearch"
+if check_for_new_version((version_major, version_minor), get_latest_version()[1]):
+    update = update + " ! Nieuwe versie beschikbaar !"
+
 tabgrp = [
     [PySimpleGUI.TabGroup(
         [
@@ -156,6 +182,8 @@ tabgrp = [
         ],
         selected_title_color="green"
     ),
+        [PySimpleGUI.Text("Versie : " + str( version_major)+'.' + str(version_minor))],
+        [PySimpleGUI.Text(update, text_color='red', font=('Courier New', 12, 'underline'), enable_events=True, key='koenvelle.be')],
         [PySimpleGUI.Text("Koen Velle (koen.velle@gmail.com)")],
         [PySimpleGUI.Text("'Standing on the shoulders of Giants' (de vrijwilligers van het RAB)")]
     ]
@@ -522,6 +550,8 @@ while True:
         parochie = values['parochieregisters_parochie']
     if event is None:
         event = ''
+    if event.startswith('koenvelle.be'):
+        webbrowser.open("https://koenvelle.be/rabsearch", autoraise=True)
 
     if event.startswith('parochieregisters_gemeente'):
         value = values['parochieregisters_gemeente']
