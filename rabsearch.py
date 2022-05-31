@@ -32,7 +32,7 @@ from tkinter import *
 import folium
 
 version_major = 1
-version_minor = 0
+version_minor = 2
 
 def get_latest_version():
     version_url = "https://koenvelle.be/rabsearch/version"
@@ -77,6 +77,10 @@ tweede_pers_voor = PySimpleGUI.InputText(size=20, key='pers2_voornaam')
 tweede_pers_achter = PySimpleGUI.InputText(size=20, key='pers2_achternaam')
 tweede_pers_rol = PySimpleGUI.DropDown(size=20, key='pers2_rol', values=[x[1] for x in roles.person_roles],
                                        default_value=roles.person_roles[0][1])
+
+radio_zoekwijze_exact = PySimpleGUI.Radio('Exact', "ZOEKWIJZE", default=True, key='zoekwijze_exact')
+radio_zoekwijze_klinkt_als = PySimpleGUI.Radio('Klinkt als', "ZOEKWIJZE", key='zoekwijze_klinkt_als',  default=False)
+
 akteperiode = PySimpleGUI.InputText(size=20, key='akteperiode')
 aktegemeente_zoek = PySimpleGUI.InputText(size=46, key='aktegemeente_zoek', enable_events=True)
 check_results = PySimpleGUI.Button("Zoek aantal resultaten per gemeente", key='tel_resultaten', enable_events=True,
@@ -96,7 +100,7 @@ kaart = PySimpleGUI.Button("Kaart", disabled=True, enable_events=True, key="kaar
 
 zoek = PySimpleGUI.Button('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegeven aktegemeente")
 
-inputs = [radius_slider, radius_search_results, eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter,
+inputs = [radius_slider, eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter,
           eerste_pers_rol,
           tweede_pers_achter, tweede_pers_voor, tweede_pers_rol, zw_o, zw_v, zw_m, aktegemeente_dropdown, akteperiode,
           check_results, aktegemeente_zoek]
@@ -107,8 +111,9 @@ person1_column = [
     [PySimpleGUI.Text("Voornaam", size=15), eerste_pers_voor],
     [PySimpleGUI.Text("Rol", size=15), eerste_pers_rol],
     [PySimpleGUI.Text("Beroep", size=15), eerste_persoon_beroep],
-    [PySimpleGUI.Text("Geslacht", size=15), zw_m, zw_v, zw_o]
-]
+    [PySimpleGUI.Text("Geslacht", size=15), zw_m, zw_v, zw_o],
+    [PySimpleGUI.Text("Zoekwijze", size=15), radio_zoekwijze_exact, radio_zoekwijze_klinkt_als]
+    ]
 person2_column = [
     [PySimpleGUI.Text("Persoon 2", size=15, text_color='black', font='bold')],
     [PySimpleGUI.Text("Achternaam", size=15), tweede_pers_achter],
@@ -116,6 +121,9 @@ person2_column = [
     [PySimpleGUI.Text("Rol", size=15), tweede_pers_rol],
     [PySimpleGUI.Text("")],
     [PySimpleGUI.Text("")]
+]
+zoekopties_row = [
+    [PySimpleGUI.Text("Opties", size=15, text_color='black', font='bold')],
 ]
 aktegemeente_row = [
     [PySimpleGUI.Text("Aktegemeente", text_color='black', font='bold')],
@@ -260,6 +268,7 @@ def create_url(values, gemeente):
     zw_m = '1' if values['zw_m'] else '0'
     zw_v = '1' if values['zw_v'] else '0'
     zw_o = '1' if values['zw_o'] else '0'
+    zoekwijze = 's' if values['zoekwijze_exact'] is True else 'p'
 
     if vn1 != '':
         vn1 = "q/persoon_voornaam_t_0/" + vn1 + '/'
@@ -285,7 +294,7 @@ def create_url(values, gemeente):
         periode = "&akteperiode=" + periode
 
     url = "https://search.arch.be/nl/zoeken-naar-personen/zoekresultaat/" + an1 + vn1 + rol1 + an2 + vn2 \
-          + rol2 + "q/zoekwijze/s/" + beroep1 + "?M=" + zw_m + "&V=" + zw_v + "&O=" + zw_o + "&persoon_0_periode_geen=0" \
+          + rol2 + "q/zoekwijze/"+zoekwijze + "/" + beroep1 + "?M=" + zw_m + "&V=" + zw_v + "&O=" + zw_o + "&persoon_0_periode_geen=0&sort=akte_datum&direction=asc" \
           + gemeente + periode
     return url
 
@@ -295,6 +304,8 @@ def disable_person_inputs(disable=True):
         item.update(disabled=disable)
     abort_search.update(disabled=(disable is False))
 
+def update_radius_results(hits):
+    radius_search_results.update(hits, disabled=False)
 
 class ResultsScavenger(threading.Thread):
 
@@ -306,11 +317,12 @@ class ResultsScavenger(threading.Thread):
         self.__results = results
         self.__match_indexes = match_indexes
         self.__stop_requested = False
+        self.__show_all = True
         threading.Thread.__init__(self)
 
     def collect_results(self, values, gemeentes, results, match_indexes):
 
-        i = 0
+        self._progress = 0
         hit_map_locations = []
         for item in (gemeentes):
 
@@ -329,14 +341,16 @@ class ResultsScavenger(threading.Thread):
                     if match is not None:
                         hit_count = match.groups()[2]
                         results.append(item + ' (aantal : ' + hit_count + ')')
-                        match_indexes.append(i)
+                        match_indexes.append(len(results) -1)
                         name, (lat, lon) = get_city_location(item)
                         hit_map_locations.append([name, lat, lon, hit_count, url])
-                    else:
+                        update_radius_results(results)
+                    elif self.__show_all:
                         results.append(item + ' (aantal : 0)')
+                        update_radius_results(results)
 
-                i = i + 1
-                window.write_event_value("progress", i)
+                self._progress = self._progress + 1
+                window.write_event_value("progress", self._progress)
 
         x, centre = get_city_location(gemeentes[0])
         generate_hit_map(centre, hit_map_locations, self.__values['radius'])
@@ -357,10 +371,13 @@ class ResultsScavenger(threading.Thread):
         self.__stop_requested = False
 
     def completion(self):
-        return int((len(self.__results) * 100) / len(self.__gemeentes))
+        return int((self._progress * 100) / len(self.__gemeentes))
 
     def stop(self):
         self.__stop_requested = True
+
+    def show_all(self, val=True):
+        self.__show_all= val
 
 
 def generate_hit_map(centre, locations, radius):
@@ -637,14 +654,16 @@ while True:
             disable_person_inputs(True)
             progress_bar.update(0, visible=False)
             rs = ResultsScavenger(values, radius_search_results.get_list_values(), results, match_indexes)
+            rs.show_all(False)
             rs.start()
 
     elif event == "gemeentelijst" or event == "zoek":
-        aktegemeente = values['aktegemeente_zoek'] if event == 'zoek' else values['gemeentelijst'][0] if len(
-            values['gemeentelijst']) else ''
-        aktegemeente = aktegemeente.split('(aantal')
-        url = create_url(values, aktegemeente[0])
-        webbrowser.open_new_tab(url)
+        if (len(values['gemeentelijst'])):
+            aktegemeente = values['aktegemeente_zoek'] if event == 'zoek' else values['gemeentelijst'][0] if len(
+                values['gemeentelijst']) else ''
+            aktegemeente = aktegemeente.split('(aantal')
+            url = create_url(values, aktegemeente[0])
+            webbrowser.open_new_tab(url)
 
 sys.exit()
 

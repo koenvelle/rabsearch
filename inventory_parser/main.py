@@ -6,6 +6,13 @@ from datetime import datetime
 import calendar
 import codecs
 
+
+
+
+
+def checkUpdate():
+    print("Checking for update")
+
 def readNextLine(f):
     line = f.readline()
     #print(line.strip())
