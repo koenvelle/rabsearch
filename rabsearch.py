@@ -218,11 +218,19 @@ PR_gemeentelijst.bind("<Return>", "parochieregisters_gemeente_enter")
 
 aktegemeente_dropdown.bind(bind_string="<KeyRelease>", key_modifier="", propagate=True)
 
+resetinputs = [eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter,
+          tweede_pers_achter, tweede_pers_voor, aktegemeente_dropdown, akteperiode,
+          ]
+
 def reset_all_fields():
-    for item in inputs:
+    for item in resetinputs:
         item.update("")
     eerste_pers_rol.update("Alle rollen")
     tweede_pers_rol.update("Alle rollen")
+    zw_o.update(False)
+    zw_v.update(False)
+    zw_m.update(False)
+    radius_slider.update(10)
 
 def get_city_location(src):
     return citylocs[next((i for i, v in enumerate(citylocs) if v[0] == src))]
