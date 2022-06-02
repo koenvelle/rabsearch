@@ -2,3 +2,4 @@ requests
 geopy
 pysimplegui
 folium
+pyinstaller
