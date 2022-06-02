@@ -32,7 +32,7 @@ from tkinter import *
 import folium
 
 version_major = 1
-version_minor = 2
+version_minor = 3
 
 def get_latest_version():
     version_url = "https://koenvelle.be/rabsearch/version"
@@ -99,6 +99,7 @@ radius_search_results = PySimpleGUI.Listbox(values=[], size=(82, 30), key='gemee
 kaart = PySimpleGUI.Button("Kaart", disabled=True, enable_events=True, key="kaart")
 
 zoek = PySimpleGUI.Button('Zoek', key='zoek', tooltip="Toon de resultaten voor de opgegeven aktegemeente")
+reset = PySimpleGUI.Button('Reset', key='reset', tooltip="Reset alle velden")
 
 inputs = [radius_slider, eerste_persoon_beroep, eerste_pers_voor, eerste_pers_achter,
           eerste_pers_rol,
@@ -130,7 +131,7 @@ aktegemeente_row = [
     [PySimpleGUI.Text("Gemeente", size=15), aktegemeente_zoek],
     [PySimpleGUI.Text("", size=15), aktegemeente_dropdown],
     [PySimpleGUI.Text("Periode", size=15), akteperiode],
-    [zoek],
+    [zoek, reset],
 ]
 buurgemeente_row = [
     [PySimpleGUI.Text("Zoeken in omgeving", size=25, text_color='black', font='bold')],
@@ -217,6 +218,11 @@ PR_gemeentelijst.bind("<Return>", "parochieregisters_gemeente_enter")
 
 aktegemeente_dropdown.bind(bind_string="<KeyRelease>", key_modifier="", propagate=True)
 
+def reset_all_fields():
+    for item in inputs:
+        item.update("")
+    eerste_pers_rol.update("Alle rollen")
+    tweede_pers_rol.update("Alle rollen")
 
 def get_city_location(src):
     return citylocs[next((i for i, v in enumerate(citylocs) if v[0] == src))]
@@ -567,6 +573,8 @@ while True:
         parochie = values['parochieregisters_parochie']
     if event is None:
         event = ''
+    if event == 'reset':
+        reset_all_fields()
     if event.startswith('koenvelle.be'):
         webbrowser.open("https://koenvelle.be/rabsearch", autoraise=True)
 
