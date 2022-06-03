@@ -673,10 +673,14 @@ while True:
             rs.show_all(False)
             rs.start()
 
-    elif event == "gemeentelijst" or event == "zoek":
+    elif event == "zoek":
+            aktegemeente = values['aktegemeente_zoek']
+            url = create_url(values, aktegemeente)
+            webbrowser.open_new_tab(url)
+
+    elif event == "gemeentelijst" :
         if (len(values['gemeentelijst'])):
-            aktegemeente = values['aktegemeente_zoek'] if event == 'zoek' else values['gemeentelijst'][0] if len(
-                values['gemeentelijst']) else ''
+            aktegemeente = values['gemeentelijst'][0]
             aktegemeente = aktegemeente.split('(aantal')
             url = create_url(values, aktegemeente[0])
             webbrowser.open_new_tab(url)
